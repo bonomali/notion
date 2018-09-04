@@ -11,3 +11,4 @@ Commands
 ========
 
 cmd/notion-to-plaintext - renders vim-foldmarker style output from a notion page.
+cmd/update-notion-block-text - updates the text content of a text block using content from stdin.
