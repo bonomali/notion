@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -134,9 +135,15 @@ type loadPageChunkResponse struct {
 }
 
 // GetPage returns a Page given an id.
-func (c *Client) GetPage(pageID string) (*Page, error) {
+func (c *Client) GetPage(pageId string) (*Page, error) {
+	b, err := c.GetBlock(pageId)
+	return &Page{Block: b}, err
+}
+
+// GetBlock returns a Block given an id.
+func (c *Client) GetBlock(blockID string) (*notiontypes.Block, error) {
 	lp := loadPageChunkRequest{
-		PageID: pageID,
+		PageID: blockID,
 		Limit:  50,
 		Cursor: Cursor{
 			Stack: [][]StackPosition{},
@@ -149,7 +156,7 @@ func (c *Client) GetPage(pageID string) (*Page, error) {
 		if err != nil {
 			return nil, err
 		}
-		c.logger.WithField("pageID", pageID).Debugln(string(b))
+		c.logger.WithField("blockID", blockID).Debugln(string(b))
 		if err := json.Unmarshal(b, r); err != nil {
 			return nil, errors.Wrap(err, "unmarshaling loadPageChunkResponse")
 		}
@@ -160,7 +167,7 @@ func (c *Client) GetPage(pageID string) (*Page, error) {
 			break
 		}
 	}
-	return c.parsePageFromRecordMaps(pageID, results)
+	return c.parseBlockFromRecordMaps(blockID, results)
 }
 
 func mergeRecordMaps(rms ...notiontypes.RecordMap) (notiontypes.RecordMap, error) {
@@ -193,22 +200,60 @@ func mergeRecordMaps(rms ...notiontypes.RecordMap) (notiontypes.RecordMap, error
 	return result, nil
 }
 
-func (c *Client) parsePageFromRecordMaps(pageID string, responses []notiontypes.RecordMap) (*Page, error) {
+func (c *Client) parseBlockFromRecordMaps(blockID string, responses []notiontypes.RecordMap) (*notiontypes.Block, error) {
 	rm, err := mergeRecordMaps(responses...)
 	if err != nil {
 		return nil, err
 	}
-	pageBlock, ok := rm.Blocks[pageID]
+	blockBlock, ok := rm.Blocks[blockID]
 	if !ok {
-		return nil, fmt.Errorf("notion: missing page id in block list")
+		return nil, fmt.Errorf("notion: missing block id in block list")
 	}
-	page := &Page{Block: pageBlock.Value}
+	block := blockBlock.Value
 	blocks := make(map[string]*notiontypes.Block, len(rm.Blocks))
 	for k, v := range rm.Blocks {
 		blocks[k] = v.Value
 	}
-	if err := notiontypes.ResolveBlock(page.Block, blocks); err != nil {
+	if err := notiontypes.ResolveBlock(block, blocks); err != nil {
 		return nil, errors.Wrap(err, "resolveBlock failed")
 	}
-	return page, nil
+	return block, nil
+}
+
+type operation struct {
+	ID      string     `json:"id"`
+	Table   string     `json:"table"`
+	Path    []string   `json:"path"`
+	Command string     `json:"command"`
+	Args    [][]string `json:"args"`
+}
+
+type submitTransactionRequest struct {
+	Operations []*operation `json:"operations"`
+}
+type submitTransactionResponse map[string]interface{}
+
+// UpdateBlock returns a Block given an id.
+func (c *Client) UpdateBlock(blockID string, path string, value string) error {
+	lp := submitTransactionRequest{
+		Operations: []*operation{
+			&operation{
+				ID:      blockID,
+				Table:   "block",
+				Path:    strings.Split(path, "."),
+				Command: "set",
+				Args: [][]string{
+					[]string{value},
+				},
+			},
+		},
+	}
+	r := &submitTransactionResponse{}
+	b, err := c.post(lp, "submitTransaction")
+	if err != nil {
+		return err
+	}
+	c.logger.WithField("blockID", blockID).Debugln(string(b))
+	c.logger.Debugln("resp:", r)
+	return nil
 }

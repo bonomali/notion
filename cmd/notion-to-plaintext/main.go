@@ -16,7 +16,7 @@ func main() {
 	flag.Parse()
 	if len(flag.Args()) != 1 {
 		flag.Usage()
-		fmt.Fprintln(os.Stderr, "please provide document id as parameter")
+		fmt.Fprintln(os.Stderr, "please provide block (page) id as parameter")
 		os.Exit(1)
 	}
 	if err := run(flag.Args()[0]); err != nil {
@@ -36,18 +36,18 @@ func run(id string) error {
 	if err != nil {
 		return err
 	}
-	pageInfo, err := c.GetRecordValues(notion.Record{Table: "block", ID: id})
+	blockInfo, err := c.GetRecordValues(notion.Record{Table: "block", ID: id})
 	if err != nil {
 		return err
 	}
-	if pageInfo[0].Value == nil {
-		return fmt.Errorf("issue fetching content, Role=%v", pageInfo[0].Role)
+	if blockInfo[0].Value == nil {
+		return fmt.Errorf("issue fetching content, Role=%v", blockInfo[0].Role)
 	}
-	p, err := c.GetPage(pageInfo[0].Value.ID)
+	p, err := c.GetBlock(blockInfo[0].Value.ID)
 	if err != nil {
 		return err
 	}
-	r, err := notion.PrintAsVim(p.Block, "  ")
+	r, err := notion.PrintAsVim(p, "  ")
 	if err != nil {
 		return err
 	}
