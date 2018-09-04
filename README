@@ -4,3 +4,10 @@ notion
 A notion.so client for Go.
 
 https://godoc.org/github.com/tmc/notion
+
+Please reference the godoc link above for api documentation.
+
+Commands
+========
+
+cmd/notion-to-plaintext - renders vim-foldmarker style output from a notion page.
